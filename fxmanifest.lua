@@ -11,6 +11,7 @@ client_scripts {
     'components/cl_*.lua',
 }
 
+server_script("@oxmysql/lib/MySQL.lua")
 server_scripts {
     'sh_init.lua',
     'sv_init.lua',
