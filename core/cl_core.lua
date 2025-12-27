@@ -89,18 +89,6 @@ CreateThread(function()
 	LocalPlayer.state:set('clientID', PlayerId())
 	LocalPlayer.state:set('serverID', GetPlayerServerId(PlayerId()))
 	StatSetInt(`MP0_STAMINA`, 25, true)
-
-	AddStateBagChangeHandler(
-		"isAdmin",
-		string.format("player:%s", LocalPlayer.state.serverID),
-		function(bagName, key, value, _unused, replicated)
-			if value then
-				StatSetInt(`MP0_SHOOTING_ABILITY`, 100, true)
-			else
-				StatSetInt(`MP0_SHOOTING_ABILITY`, 5, true)
-			end
-		end
-	)
 end)
 
 local _baseThreading = false
