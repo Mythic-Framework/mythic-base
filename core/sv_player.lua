@@ -235,19 +235,18 @@ function PlayerClass(source, data)
 		end,
 	}
 
-	local steam = GetPlayerSteam(source) -- Because the Identifier is Stored in Decimal (When you need hex)
-	for k, v in ipairs(_data:GetData("Groups")) do
-		if
-			COMPONENTS.Config.Groups[tostring(v)] ~= nil
-			and type(COMPONENTS.Config.Groups[tostring(v)].Permission) == "table"
-			and COMPONENTS.Config.Groups[tostring(v)].Permission.Group
-		then
-			ExecuteCommand(
-				("add_principal identifier.steam:%s group.%s"):format(
-					steam,
-					COMPONENTS.Config.Groups[tostring(v)].Permission.Group
-				)
-			)
+	local ident, idType = GetPlayerPrimaryIdentifier(source)
+
+	for _, v in ipairs(_data:GetData("Groups")) do
+		local g = COMPONENTS.Config.Groups[tostring(v)]
+		if g and type(g.Permission) == "table" and g.Permission.Group then
+			if ident then
+				ExecuteCommand(("add_principal identifier.%s:%s group.%s"):format(
+					idType,
+					ident,
+					g.Permission.Group
+				))
+			end
 		end
 	end
 
@@ -262,4 +261,16 @@ function GetPlayerSteam(source)
 		end
 	end
 	return false
+end
+
+function GetPlayerPrimaryIdentifier(src)
+    local primary = GetConvar('mythic_primary_identifier', 'license')
+
+    for _, id in ipairs(GetPlayerIdentifiers(src)) do
+        if id:sub(1, #primary + 1) == primary .. ':' then
+            return id
+        end
+    end
+
+    return nil
 end
