@@ -13,6 +13,7 @@ COMPONENTS.Version = {
 
     PerformHttpRequest(versionUrl, function(err, newestVersion)
       local currentVersion = GetResourceMetadata(resource, "version", 0)
+      local resourceRepo = GetResourceMetadata(resource, "repository", 0)
 
       local resourceName = resource:gsub("(%a)([%w]*)", function(a, b)
         return a:upper() .. b
@@ -41,7 +42,7 @@ COMPONENTS.Version = {
         COMPONENTS.Logger:Warn("Version", ("  Installed:  ^1%s^0"):format(current))
         COMPONENTS.Logger:Warn("Version", ("  Latest:     ^2%s^0"):format(newest))
         COMPONENTS.Logger:Warn("Version", "")
-        COMPONENTS.Logger:Warn("Version", ("  Update Now: ^3%s^0"):format(repoUrl))
+        COMPONENTS.Logger:Warn("Version", ("  Update Now: ^3%s^0"):format(resourceRepo or repoUrl))
         COMPONENTS.Logger:Warn("Version", "^5=======================================================^0")
         COMPONENTS.Logger:Warn("Version", "")
       end
