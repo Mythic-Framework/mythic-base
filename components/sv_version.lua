@@ -1,31 +1,50 @@
-local function CheckVersion()
-    PerformHttpRequest('https://raw.githubusercontent.com/Mythic-Framework/Mythic-VersionCheckers/main/mythic-base.txt', function(err, newestVersion, headers)
-        local currentVersion = GetResourceMetadata(GetCurrentResourceName(), 'version')
-        local resourceName = GetCurrentResourceName():gsub('(%a)([%w]*)', function(a, b) return a:upper() .. b end)
+COMPONENTS.Version = {
+  _protected = true,
+  _required = { "Check" },
+  _name = "base",
 
-        if not newestVersion then
-            print('^3[' .. resourceName .. ']^0 Unable to perform version check.')
-            return
-        end
+  ---Checks the version of the invoking resource
+  ---@param repo string (GitHub repo, e.g. Mythic-Framework/mythic-base)
+  Check = function(self, repo, resource)
+    resource = resource or GetInvokingResource() or GetCurrentResourceName()
 
-        local isLatestVersion = newestVersion:gsub('%s+', '') == currentVersion:gsub('%s+', '')
-        if isLatestVersion then
-            print(('^5[%s]^0 Running latest version (^2%s^0)'):format(resourceName, currentVersion))
-        else
-            print('')
-            print('^5=======================================================^0')
-            print(('^5  %s^0'):format(resourceName))
-            print('^5=======================================================^0')
-            print('^1  UPDATE AVAILABLE^0')
-            print('')
-            print(('  Installed:  ^1%s^0'):format(currentVersion))
-            print(('  Latest:     ^2%s^0'):format(newestVersion:gsub('%s+', '')))
-            print('')
-            print('  Update Now: ^3https://github.com/Mythic-Framework/mythic-base^0')
-            print('^5=======================================================^0')
-            print('')
-        end
+    local versionUrl = ("https://raw.githubusercontent.com/%s/main/%s.txt"):format(repo, resource)
+    local repoUrl = ("https://github.com/%s"):format(repo)
+
+    PerformHttpRequest(versionUrl, function(err, newestVersion)
+      local currentVersion = GetResourceMetadata(resource, "version", 0)
+
+      local resourceName = resource:gsub("(%a)([%w]*)", function(a, b)
+        return a:upper() .. b
+      end)
+
+      if not newestVersion then
+        COMPONENTS.Logger:Warn("Version", ("[%s] Unable to perform version check"):format(resourceName))
+        return
+      end
+
+      local newest = (newestVersion or ""):gsub("%s+", "")
+      local current = (currentVersion or ""):gsub("%s+", "")
+
+      if newest == current then
+        COMPONENTS.Logger:Info(
+          "Version",
+          ("^5[%s]^0 Running latest version (^2%s^0)"):format(resourceName, current)
+        )
+      else
+        COMPONENTS.Logger:Warn("Version", "")
+        COMPONENTS.Logger:Warn("Version", "^5=======================================================^0")
+        COMPONENTS.Logger:Warn("Version", ("^5  %s^0"):format(resourceName))
+        COMPONENTS.Logger:Warn("Version", "^5=======================================================^0")
+        COMPONENTS.Logger:Warn("Version", "^1  UPDATE AVAILABLE^0")
+        COMPONENTS.Logger:Warn("Version", "")
+        COMPONENTS.Logger:Warn("Version", ("  Installed:  ^1%s^0"):format(current))
+        COMPONENTS.Logger:Warn("Version", ("  Latest:     ^2%s^0"):format(newest))
+        COMPONENTS.Logger:Warn("Version", "")
+        COMPONENTS.Logger:Warn("Version", ("  Update Now: ^3%s^0"):format(repoUrl))
+        COMPONENTS.Logger:Warn("Version", "^5=======================================================^0")
+        COMPONENTS.Logger:Warn("Version", "")
+      end
     end)
-end
-
-CheckVersion()
+  end
+}
