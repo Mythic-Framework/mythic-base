@@ -1,18 +1,18 @@
 COMPONENTS = {}
 
 AddEventHandler('onResourceStart', function(resource)
-    if resource == GetCurrentResourceName() then
-        CreateThread(function()
-            local ver
-            repeat Wait(0) until COMPONENTS.Convar.MFW_VERSION ~= nil
+  if resource == GetCurrentResourceName() then
+    CreateThread(function()
+      local ver
+      repeat Wait(0) until COMPONENTS.Convar.MFW_VERSION ~= nil
 
-            if COMPONENTS.Convar.MFW_VERSION.value == "UNKNOWN" then
-                ver = "^1Version Unknown"
-            else
-                ver = "^2v"..COMPONENTS.Convar.MFW_VERSION.value
-            end
+      if COMPONENTS.Convar.MFW_VERSION.value == "UNKNOWN" then
+        ver = "^1Version Unknown"
+      else
+        ver = "^2v" .. COMPONENTS.Convar.MFW_VERSION.value
+      end
 
-            print([[
+      print([[
 
 ^2=================================================================================================^7
 ^5$$\      $$\             $$\     $$\       $$\                                                
@@ -42,7 +42,8 @@ AddEventHandler('onResourceStart', function(resource)
 
 ]])
 
-            TriggerEvent('Core:Shared:Watermark')
-        end)
-    end
+      TriggerEvent('Core:Shared:Watermark')
+      COMPONENTS.Version:Check("Mythic-Framework/Mythic-VersionCheckers")
+    end)
+  end
 end)
