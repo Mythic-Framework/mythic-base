@@ -69,4 +69,6 @@ AddEventHandler("Core:Shared:Ready", function()
 			console = true,
 		})
 	end)
+
+	COMPONENTS.Version:Check('Mythic-Framework/Mythic-VersionCheckers', 'mythic-base')
 end)

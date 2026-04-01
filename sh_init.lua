@@ -43,7 +43,6 @@ AddEventHandler('onResourceStart', function(resource)
 ]])
 
       TriggerEvent('Core:Shared:Watermark')
-      COMPONENTS.Version:Check("Mythic-Framework/Mythic-VersionCheckers")
     end)
   end
 end)
