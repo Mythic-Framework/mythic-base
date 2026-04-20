@@ -2,7 +2,7 @@ fx_version 'cerulean'
 games { 'gta5' }
 lua54 'yes'
 repository 'https://github.com/Mythic-Framework/mythic-base'
-version '1.0.2'
+version '1.0.3'
 
 
 client_script "@mythic-pwnzor/client/check.lua"
