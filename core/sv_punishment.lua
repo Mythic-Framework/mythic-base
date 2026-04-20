@@ -2,7 +2,7 @@ COMPONENTS.Punishment = {
 	_required = { "CheckBan", "Kick", "Unban", "Ban" },
 	_name = "base",
 	CheckBan = function(self, key, value)
-		local retVal = -1 -- Fuck You Lua
+		local retVal = -1
 
 		local p = promise.new()
 		COMPONENTS.Database.Auth:findOne({

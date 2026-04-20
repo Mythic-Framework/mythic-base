@@ -31,8 +31,7 @@ COMPONENTS.WebAPI = {
 
 		local rData = nil
 
-		-- idfk, im too tired and fucking done with all this bullshit to try to think of a better way to do this retarded fucking bullshit.
-		-- Fuck everyone
+		-- Note: this is a bit jank, but it allows us to pass query parameters in a table instead of having to manually concatenate them into the endpoint string.
 		local first = true
 		if params ~= nil then
 			for k, v in pairs(params) do
