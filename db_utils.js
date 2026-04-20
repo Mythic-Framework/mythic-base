@@ -17,13 +17,13 @@ function safeObjectArgument(object) {
 	if (!object) return {};
 	if (Array.isArray(object)) {
 		return object.reduce((acc, value, index) => {
-			if (index == '_id') acc[index] = mongodb.ObjectID(value);
+			if (index == '_id') acc[index] = new mongodb.ObjectId(value);
 			else acc[index] = value;
 			return acc;
 		}, {});
 	}
 	if (typeof object !== 'object') return {};
-	if (object._id) object._id = mongodb.ObjectID(object._id);
+	if (object._id) object._id = new mongodb.ObjectId(object._id);
 	return object;
 }
 
