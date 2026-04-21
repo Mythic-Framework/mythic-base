@@ -25,7 +25,7 @@ local function schemaInfo(schema)
     return cols, jsonCols
 end
 
--- Internal: table creation 
+-- Internal: table creation
 
 local function buildCreateSQL(tbl, schema)
     local defs = { '`_id` INT NOT NULL AUTO_INCREMENT' }
@@ -63,7 +63,7 @@ AddEventHandler('onResourceStart', function(res)
     end)
 end)
 
--- Internal: row encode / decode 
+-- Internal: row encode / decode
 
 local function decodeRow(row, schema)
     local doc = { _id = row._id }
@@ -95,6 +95,21 @@ local function encodeField(v)
     return v
 end
 
+-- Internal: PULL helper — removes matching elements from a Lua array
+
+local function applyPull(arr, match)
+    if type(arr) ~= 'table' then return {} end
+    local result = {}
+    for _, item in ipairs(arr) do
+        local matched = true
+        for k, v in pairs(match) do
+            if item[k] ~= v then matched = false; break end
+        end
+        if not matched then result[#result+1] = item end
+    end
+    return result
+end
+
 local function buildInsertParts(doc, schema, tblName)
     local cols, jsonCols = schemaInfo(schema)
     local names, vals = {}, {}
@@ -114,21 +129,37 @@ local function buildInsertParts(doc, schema, tblName)
     return names, vals
 end
 
+-- Returns setParts, setParams, pullFields (fields with PULL ops handled separately)
 local function buildSetParts(fields, schema)
     local cols, jsonCols = schemaInfo(schema)
-    local parts, params = {}, {}
+    local parts, params, pullFields = {}, {}, {}
     for k, v in pairs(fields) do
-        if cols[k] then
+        if type(v) == 'table' and v.__op then
+            if v.__op == 'push' then
+                if jsonCols[k] then
+                    parts[#parts+1]  = ('`%s`=JSON_ARRAY_APPEND(COALESCE(`%s`,\'[]\'),\'$\',CAST(? AS JSON))'):format(k, k)
+                    params[#params+1] = json.encode(v.v)
+                else
+                    print(('[DATABASE] [WARN] PUSH on "%s": not a jsonCol, ignored'):format(k))
+                end
+            elseif v.__op == 'pull' then
+                if jsonCols[k] then
+                    pullFields[k] = v.v
+                else
+                    print(('[DATABASE] [WARN] PULL on "%s": not a jsonCol, ignored'):format(k))
+                end
+            end
+        elseif cols[k] then
             parts[#parts+1]  = ('`%s`=?'):format(k)
             params[#params+1] = encodeField(v)
         elseif jsonCols[k] then
             parts[#parts+1]  = ('`%s`=?'):format(k)
             params[#params+1] = json.encode(v)
         else
-            print(('[DATABASE] [WARN] Update: field "%s" not in schema for this table, ignored'):format(k))
+            print(('[DATABASE] [WARN] Update: field "%s" not in schema, ignored'):format(k))
         end
     end
-    return parts, params
+    return parts, params, pullFields
 end
 
 -- Internal: WHERE builder
@@ -142,16 +173,16 @@ local function buildWhere(where, schema)
     local function colCond(field, value)
         if type(value) == 'table' and value.__op then
             local op, v = value.__op, value.v
-            if op == 'gt'   then parts[#parts+1] = ('`%s` > ?'):format(field)                               ; params[#params+1] = v
-            elseif op == 'lt'   then parts[#parts+1] = ('`%s` < ?'):format(field)                               ; params[#params+1] = v
-            elseif op == 'gte'  then parts[#parts+1] = ('`%s` >= ?'):format(field)                              ; params[#params+1] = v
-            elseif op == 'lte'  then parts[#parts+1] = ('`%s` <= ?'):format(field)                              ; params[#params+1] = v
-            elseif op == 'ne'   then parts[#parts+1] = ('(`%s` != ? OR `%s` IS NULL)'):format(field, field)     ; params[#params+1] = v
-            elseif op == 'like' then parts[#parts+1] = ('`%s` LIKE ?'):format(field)                            ; params[#params+1] = v
-            elseif op == 'in' then
-                if #v == 0 then parts[#parts+1] = '0=1' ; return end
+            if     op == 'gt'   then parts[#parts+1] = ('`%s` > ?'):format(field)                             ; params[#params+1] = v
+            elseif op == 'lt'   then parts[#parts+1] = ('`%s` < ?'):format(field)                             ; params[#params+1] = v
+            elseif op == 'gte'  then parts[#parts+1] = ('`%s` >= ?'):format(field)                            ; params[#params+1] = v
+            elseif op == 'lte'  then parts[#parts+1] = ('`%s` <= ?'):format(field)                            ; params[#params+1] = v
+            elseif op == 'ne'   then parts[#parts+1] = ('(`%s` != ? OR `%s` IS NULL)'):format(field, field)   ; params[#params+1] = v
+            elseif op == 'like' then parts[#parts+1] = ('`%s` LIKE ?'):format(field)                          ; params[#params+1] = v
+            elseif op == 'in'   then
+                if #v == 0 then parts[#parts+1] = '0=1'; return end
                 local ph = {}
-                for _, val in ipairs(v) do ph[#ph+1] = '?' ; params[#params+1] = val end
+                for i = 1, #v do ph[#ph+1] = '?'; params[#params+1] = v[i] end
                 parts[#parts+1] = ('`%s` IN (%s)'):format(field, table.concat(ph, ','))
             end
         else
@@ -165,9 +196,9 @@ local function buildWhere(where, schema)
             local op, v = value.__op, value.v
             if op == 'in' then
                 local orParts = {}
-                for _, val in ipairs(v) do
+                for i = 1, #v do
                     orParts[#orParts+1] = ('JSON_CONTAINS(`%s`, JSON_QUOTE(?))'):format(field)
-                    params[#params+1] = tostring(val)
+                    params[#params+1] = tostring(v[i])
                 end
                 if #orParts > 0 then parts[#parts+1] = '(' .. table.concat(orParts, ' OR ') .. ')' end
             elseif op == 'ne' then
@@ -186,29 +217,30 @@ local function buildWhere(where, schema)
             params[#params+1] = value
         elseif field == '__or' then
             local orParts, orParams = {}, {}
-            for _, sub in ipairs(value) do
-                local sw, sp = buildWhere(sub, schema)
+            for i = 1, #value do
+                local sw, sp = buildWhere(value[i], schema)
                 if sw ~= '1=1' then
                     orParts[#orParts+1] = '(' .. sw .. ')'
-                    for _, p in ipairs(sp) do orParams[#orParams+1] = p end
+                    for j = 1, #sp do orParams[#orParams+1] = sp[j] end
                 end
             end
             if #orParts > 0 then
                 parts[#parts+1] = '(' .. table.concat(orParts, ' OR ') .. ')'
-                for _, p in ipairs(orParams) do params[#params+1] = p end
+                for i = 1, #orParams do params[#params+1] = orParams[i] end
             end
         elseif type(value) == 'table' and value.__op == 'or' then
             local orParts, orParams = {}, {}
-            for _, sub in ipairs(value.v) do
-                local sw, sp = buildWhere(sub, schema)
+            local subs = value.v
+            for i = 1, #subs do
+                local sw, sp = buildWhere(subs[i], schema)
                 if sw ~= '1=1' then
                     orParts[#orParts+1] = '(' .. sw .. ')'
-                    for _, p in ipairs(sp) do orParams[#orParams+1] = p end
+                    for j = 1, #sp do orParams[#orParams+1] = sp[j] end
                 end
             end
             if #orParts > 0 then
                 parts[#parts+1] = '(' .. table.concat(orParts, ' OR ') .. ')'
-                for _, p in ipairs(orParams) do params[#params+1] = p end
+                for i = 1, #orParams do params[#params+1] = orParams[i] end
             end
         elseif cols[field] then
             colCond(field, value)
@@ -222,7 +254,7 @@ local function buildWhere(where, schema)
     return #parts > 0 and table.concat(parts, ' AND ') or '1=1', params
 end
 
--- Internal: async helper 
+-- Internal: async helper
 
 local function exec(cb, fn)
     if type(cb) == 'function' then
@@ -238,18 +270,19 @@ end
 
 _DATABASE = {
 
-    -- Condition helpers
-    GT   = function(v)   return { __op = 'gt',   v = v   } end,
-    LT   = function(v)   return { __op = 'lt',   v = v   } end,
-    GTE  = function(v)   return { __op = 'gte',  v = v   } end,
-    LTE  = function(v)   return { __op = 'lte',  v = v   } end,
-    NE   = function(v)   return { __op = 'ne',   v = v   } end,
-    IN   = function(t)   return { __op = 'in',   v = t   } end,
-    LIKE = function(v)   return { __op = 'like', v = v   } end,
+    -- Operators
+    GT   = function(v)   return { __op = 'gt',   v = v    } end,
+    LT   = function(v)   return { __op = 'lt',   v = v    } end,
+    GTE  = function(v)   return { __op = 'gte',  v = v    } end,
+    LTE  = function(v)   return { __op = 'lte',  v = v    } end,
+    NE   = function(v)   return { __op = 'ne',   v = v    } end,
+    IN   = function(t)   return { __op = 'in',   v = t    } end,
+    LIKE = function(v)   return { __op = 'like', v = v    } end,
     OR   = function(...) return { __op = 'or',   v = {...} } end,
+    PUSH = function(v)   return { __op = 'push', v = v    } end,
+    PULL = function(v)   return { __op = 'pull', v = v    } end,
 
-    -- Find — returns docs[] or nil on error
-    -- opts: { sort = { field='colName', dir='ASC'|'DESC' }, limit = n }
+    -- Find
     Find = function(self, tbl, where, opts, cb)
         if type(opts) == 'function' then cb, opts = opts, nil end
         return exec(cb, function(done)
@@ -264,6 +297,9 @@ _DATABASE = {
             if opts and opts.limit then
                 sql = sql .. (' LIMIT %d'):format(opts.limit)
             end
+            if opts and opts.offset then
+                sql = sql .. (' OFFSET %d'):format(opts.offset)
+            end
             MySQL.query(sql, params, function(rows)
                 if not rows then
                     print(('[DATABASE] [ERROR] Find failed on table "%s"'):format(tbl))
@@ -276,7 +312,7 @@ _DATABASE = {
         end)
     end,
 
-    -- FindOne — returns doc or nil
+    -- FindOne
     FindOne = function(self, tbl, where, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'FindOne')
@@ -293,7 +329,85 @@ _DATABASE = {
         end)
     end,
 
-    -- Insert — returns inserted doc with _id, or nil on error
+    -- FindById
+    FindById = function(self, tbl, id, cb)
+        return self:FindOne(tbl, { _id = id }, cb)
+    end,
+
+    -- FindOneAndUpdate
+    FindOneAndUpdate = function(self, tbl, where, fields, cb)
+        return exec(cb, function(done)
+            local schema = requireSchema(tbl, 'FindOneAndUpdate')
+            if not schema then done(nil) return end
+            ensureTable(tbl, schema)
+            local w, wParams = buildWhere(where or {}, schema)
+            MySQL.query(('SELECT `_id` FROM `mfw_%s` WHERE %s LIMIT 1'):format(tbl, w), wParams, function(rows)
+                if not rows or #rows == 0 then done(nil) return end
+                local id = rows[1]._id
+                local setParts, setParams, pullFields = buildSetParts(fields, schema)
+                local function doUpdate(extraParts, extraParams)
+                    local allParts  = {}
+                    local allParams = {}
+                    for i = 1, #setParts    do allParts[#allParts+1]   = setParts[i]    end
+                    for i = 1, #extraParts  do allParts[#allParts+1]   = extraParts[i]  end
+                    for i = 1, #setParams   do allParams[#allParams+1] = setParams[i]   end
+                    for i = 1, #extraParams do allParams[#allParams+1] = extraParams[i] end
+                    if #allParts == 0 then done(nil) return end
+                    allParams[#allParams+1] = id
+                    MySQL.query(('UPDATE `mfw_%s` SET %s WHERE `_id`=?'):format(tbl, table.concat(allParts, ',')), allParams, function(r)
+                        if not r then done(nil) return end
+                        MySQL.query(('SELECT %s FROM `mfw_%s` WHERE `_id`=?'):format(buildSelect(tbl, schema), tbl), { id }, function(updated)
+                            done(updated and updated[1] and decodeRow(updated[1], schema) or nil)
+                        end)
+                    end)
+                end
+                if next(pullFields) then
+                    MySQL.query(('SELECT %s FROM `mfw_%s` WHERE `_id`=?'):format(buildSelect(tbl, schema), tbl), { id }, function(docRows)
+                        if not docRows or #docRows == 0 then done(nil) return end
+                        local doc = decodeRow(docRows[1], schema)
+                        local pullParts, pullParams = {}, {}
+                        for field, match in pairs(pullFields) do
+                            pullParts[#pullParts+1]  = ('`%s`=?'):format(field)
+                            pullParams[#pullParams+1] = json.encode(applyPull(doc[field], match))
+                        end
+                        doUpdate(pullParts, pullParams)
+                    end)
+                else
+                    doUpdate({}, {})
+                end
+            end)
+        end)
+    end,
+
+    -- Create
+    Create = function(self, tbl, doc, cb)
+        if type(cb) == 'function' then
+            if doc[1] then
+                local results, failed = {}, false
+                for i = 1, #doc do
+                    self:Insert(tbl, doc[i], function(r)
+                        if r then results[#results+1] = r else failed = true end
+                    end)
+                end
+                cb(failed and nil or results)
+            else
+                self:Insert(tbl, doc, cb)
+            end
+            return
+        end
+        if doc[1] then
+            local results = {}
+            for i = 1, #doc do
+                local r = self:Insert(tbl, doc[i])
+                if not r then return nil end
+                results[#results+1] = r
+            end
+            return results
+        end
+        return self:Insert(tbl, doc)
+    end,
+
+    -- Insert
     Insert = function(self, tbl, doc, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Insert')
@@ -305,7 +419,7 @@ _DATABASE = {
                 done(nil) return
             end
             local ph = {}
-            for _ in ipairs(vals) do ph[#ph+1] = '?' end
+            for i = 1, #vals do ph[#ph+1] = '?' end
             MySQL.query(('INSERT INTO `mfw_%s` (%s) VALUES (%s)'):format(tbl, table.concat(names, ','), table.concat(ph, ',')), vals, function(r)
                 if not r then
                     print(('[DATABASE] [ERROR] Insert failed on table "%s"'):format(tbl))
@@ -319,19 +433,47 @@ _DATABASE = {
         end)
     end,
 
-    -- Update — returns affectedRows or nil on error
+    -- Update
     Update = function(self, tbl, where, fields, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Update')
             if not schema then done(nil) return end
             ensureTable(tbl, schema)
-            local setParts, setParams = buildSetParts(fields, schema)
+            local setParts, setParams, pullFields = buildSetParts(fields, schema)
+
+            if next(pullFields) then
+                local w, wParams = buildWhere(where or {}, schema)
+                MySQL.query(('SELECT %s FROM `mfw_%s` WHERE %s'):format(buildSelect(tbl, schema), tbl, w), wParams, function(rows)
+                    if not rows or #rows == 0 then done(0) return end
+                    local remaining = #rows
+                    local affected  = 0
+                    for _, row in ipairs(rows) do
+                        local doc       = decodeRow(row, schema)
+                        local allParts  = {}
+                        local allParams = {}
+                        for i = 1, #setParts  do allParts[#allParts+1]   = setParts[i]  end
+                        for i = 1, #setParams do allParams[#allParams+1] = setParams[i] end
+                        for field, match in pairs(pullFields) do
+                            allParts[#allParts+1]   = ('`%s`=?'):format(field)
+                            allParams[#allParams+1] = json.encode(applyPull(doc[field], match))
+                        end
+                        allParams[#allParams+1] = row._id
+                        MySQL.query(('UPDATE `mfw_%s` SET %s WHERE `_id`=?'):format(tbl, table.concat(allParts, ',')), allParams, function(r)
+                            if r then affected = affected + (r.affectedRows or 0) end
+                            remaining = remaining - 1
+                            if remaining == 0 then done(affected) end
+                        end)
+                    end
+                end)
+                return
+            end
+
             if #setParts == 0 then
                 print(('[DATABASE] [ERROR] Update on "%s" — no valid fields to set'):format(tbl))
                 done(0) return
             end
             local w, wParams = buildWhere(where or {}, schema)
-            for _, p in ipairs(wParams) do setParams[#setParams+1] = p end
+            for i = 1, #wParams do setParams[#setParams+1] = wParams[i] end
             MySQL.query(('UPDATE `mfw_%s` SET %s WHERE %s'):format(tbl, table.concat(setParts, ','), w), setParams, function(r)
                 if not r then
                     print(('[DATABASE] [ERROR] Update failed on table "%s"'):format(tbl))
@@ -342,7 +484,7 @@ _DATABASE = {
         end)
     end,
 
-    -- Upsert — insert or update, returns doc or nil on error
+    -- Upsert
     Upsert = function(self, tbl, where, fields, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Upsert')
@@ -355,7 +497,7 @@ _DATABASE = {
                     setParams[#setParams+1] = rows[1]._id
                     MySQL.query(('UPDATE `mfw_%s` SET %s WHERE `_id`=?'):format(tbl, table.concat(setParts, ',')), setParams, function(r)
                         if not r then
-                            print(('[DATABASE] [ERROR] Upsert (update path) failed on "%s"'):format(tbl))
+                            print(('[DATABASE] [ERROR] Upsert (update) failed on "%s"'):format(tbl))
                             done(nil) return
                         end
                         local result = {}
@@ -369,10 +511,10 @@ _DATABASE = {
                     for k, v in pairs(fields) do doc[k] = v end
                     local names, vals = buildInsertParts(doc, schema, tbl)
                     local ph = {}
-                    for _ in ipairs(vals) do ph[#ph+1] = '?' end
+                    for i = 1, #vals do ph[#ph+1] = '?' end
                     MySQL.query(('INSERT INTO `mfw_%s` (%s) VALUES (%s)'):format(tbl, table.concat(names, ','), table.concat(ph, ',')), vals, function(r)
                         if not r then
-                            print(('[DATABASE] [ERROR] Upsert (insert path) failed on "%s"'):format(tbl))
+                            print(('[DATABASE] [ERROR] Upsert (insert) failed on "%s"'):format(tbl))
                             done(nil) return
                         end
                         local result = {}
@@ -385,7 +527,7 @@ _DATABASE = {
         end)
     end,
 
-    -- Delete — returns affectedRows or nil on error
+    -- Delete
     Delete = function(self, tbl, where, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Delete')
@@ -402,7 +544,7 @@ _DATABASE = {
         end)
     end,
 
-    -- Count — returns number or nil on error
+    -- Count
     Count = function(self, tbl, where, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Count')
@@ -415,7 +557,39 @@ _DATABASE = {
         end)
     end,
 
-    -- Increment — atomic field increment, returns new value or nil on error
+    -- Exists
+    Exists = function(self, tbl, where, cb)
+        return exec(cb, function(done)
+            local schema = requireSchema(tbl, 'Exists')
+            if not schema then done(false) return end
+            ensureTable(tbl, schema)
+            local w, params = buildWhere(where or {}, schema)
+            MySQL.scalar(('SELECT 1 FROM `mfw_%s` WHERE %s LIMIT 1'):format(tbl, w), params, function(n)
+                done(n == 1)
+            end)
+        end)
+    end,
+
+    -- Sum
+    Sum = function(self, tbl, where, field, cb)
+        return exec(cb, function(done)
+            local schema = requireSchema(tbl, 'Sum')
+            if not schema then done(nil) return end
+            ensureTable(tbl, schema)
+            local cols = {}
+            for name in pairs(schema.cols) do cols[name] = true end
+            if not cols[field] then
+                print(('[DATABASE] [ERROR] Sum on "%s": field "%s" is not a scalar column'):format(tbl, field))
+                done(nil) return
+            end
+            local w, params = buildWhere(where or {}, schema)
+            MySQL.scalar(('SELECT COALESCE(SUM(`%s`), 0) FROM `mfw_%s` WHERE %s'):format(field, tbl, w), params, function(n)
+                done(n or 0)
+            end)
+        end)
+    end,
+
+    -- Increment
     Increment = function(self, tbl, where, field, amount, cb)
         return exec(cb, function(done)
             local schema = requireSchema(tbl, 'Increment')
@@ -429,7 +603,7 @@ _DATABASE = {
             end
             local w, wParams = buildWhere(where or {}, schema)
             local updateParams = { amount }
-            for _, p in ipairs(wParams) do updateParams[#updateParams+1] = p end
+            for i = 1, #wParams do updateParams[#updateParams+1] = wParams[i] end
             MySQL.query(('UPDATE `mfw_%s` SET `%s`=`%s`+? WHERE %s'):format(tbl, field, field, w), updateParams, function(r)
                 if not r or r.affectedRows == 0 then
                     print(('[DATABASE] [ERROR] Increment failed on "%s"."%s"'):format(tbl, field))
@@ -438,6 +612,16 @@ _DATABASE = {
                 MySQL.scalar(('SELECT `%s` FROM `mfw_%s` WHERE %s LIMIT 1'):format(field, tbl, w), wParams, function(val)
                     done(val)
                 end)
+            end)
+        end)
+    end,
+
+    -- Raw
+    Raw = function(self, sql, params, cb)
+        if type(params) == 'function' then cb, params = params, {} end
+        return exec(cb, function(done)
+            MySQL.query(sql, params or {}, function(result)
+                done(result)
             end)
         end)
     end,
