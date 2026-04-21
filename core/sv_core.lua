@@ -46,13 +46,7 @@ AddEventHandler("Core:Server:StartupReady", function()
 			Wait(1)
 		end
 
-		TriggerEvent(
-			"Database:Server:Initialize",
-			COMPONENTS.Convar.AUTH_URL.value,
-			COMPONENTS.Convar.AUTH_DB.value,
-			COMPONENTS.Convar.GAME_URL.value,
-			COMPONENTS.Convar.GAME_DB.value
-		)
+		TriggerEvent("Database:Server:Ready", MythicMySQL)
 		while not COMPONENTS.Proxy.DatabaseReady do
 			Wait(1)
 		end

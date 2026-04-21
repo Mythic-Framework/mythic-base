@@ -2,7 +2,7 @@ fx_version 'cerulean'
 games { 'gta5' }
 lua54 'yes'
 repository 'https://github.com/Mythic-Framework/mythic-base'
-version '1.0.2'
+version '2.0.0'
 
 
 client_script "@mythic-pwnzor/client/check.lua"
@@ -20,10 +20,11 @@ server_scripts {
   'sh_init.lua',
   'sv_init.lua',
   'sv_config.lua',
-  'core/sv_database.js',
   'core/sv_generator.js',
   'core/sv_regex.js',
   'core/sh_*.lua',
+  'core/sv_db_schemas.lua',
+  'core/sv_database.lua',
   'core/sv_*.lua',
   'components/sv_*.lua',
 }

@@ -101,7 +101,7 @@ AddEventHandler("Queue:Server:SessionActive", function(source, data)
 				Name = data.Name,
 				Identifier = data.Identifier,
 				Groups = data.Groups,
-				Tokens = COMPONENTS.Player:CheckTokens(source, data.ID, data.Tokens),
+				Tokens = COMPONENTS.Player:CheckTokens(source, data.Identifier, data.Tokens),
 			}
 
 			for k, v in pairs(COMPONENTS.Players) do
@@ -136,8 +136,6 @@ COMPONENTS.Player = {
 	_required = {},
 	_name = "base",
 	CheckTokens = function(self, source, accountId, existing)
-		local p = promise.new()
-
 		local ctkns = {}
 		for i = 0, GetNumPlayerTokens(source) - 1 do
 			ctkns[GetPlayerToken(source, i)] = true
@@ -152,41 +150,16 @@ COMPONENTS.Player = {
 			for k, v in pairs(ctkns) do
 				table.insert(existing, k)
 			end
-			COMPONENTS.Database.Auth:updateOne({
-				collection = "users",
-				query = {
-					_id = accountId,
-				},
-				update = {
-					["$set"] = {
-						tokens = existing,
-					},
-				},
-			}, function()
-				p:resolve(existing)
-			end)
+			COMPONENTS.Database:Update('users', { identifier = accountId }, { tokens = existing })
+			return existing
 		else
 			local tkns = {}
 			for k, v in pairs(ctkns) do
 				table.insert(tkns, k)
 			end
-
-			COMPONENTS.Database.Auth:updateOne({
-				collection = "users",
-				query = {
-					_id = accountId,
-				},
-				update = {
-					["$set"] = {
-						tokens = tkns,
-					},
-				},
-			}, function()
-				p:resolve(tkns)
-			end)
+			COMPONENTS.Database:Update('users', { identifier = accountId }, { tokens = tkns })
+			return tkns
 		end
-
-		return Citizen.Await(p)
 	end,
 }
 
@@ -196,11 +169,8 @@ function PlayerClass(source, data)
 	_data.Permissions = {
 		IsStaff = function(self)
 			for k, v in ipairs(_data:GetData("Groups")) do
-				if
-					COMPONENTS.Config.Groups[v] ~= nil
-					and type(COMPONENTS.Config.Groups[v].Permission) == "table"
-					and (COMPONENTS.Config.Groups[v].Permission.Group == "staff" or COMPONENTS.Config.Groups[v].Permission.Group == "admin")
-				then
+				local g = COMPONENTS.Config.Groups[v]
+				if g and (g.PermGroup == "staff" or g.PermGroup == "admin") then
 					return true
 				end
 			end
@@ -208,11 +178,8 @@ function PlayerClass(source, data)
 		end,
 		IsAdmin = function(self)
 			for k, v in ipairs(_data:GetData("Groups")) do
-				if
-					COMPONENTS.Config.Groups[v] ~= nil
-					and type(COMPONENTS.Config.Groups[v].Permission) == "table"
-					and COMPONENTS.Config.Groups[v].Permission.Group == "admin"
-				then
+				local g = COMPONENTS.Config.Groups[v]
+				if g and g.PermGroup == "admin" then
 					return true
 				end
 			end
@@ -221,16 +188,11 @@ function PlayerClass(source, data)
 		GetLevel = function(self)
 			local highest = 0
 			for k, v in ipairs(_data:GetData("Groups")) do
-				if
-					COMPONENTS.Config.Groups[tostring(v)] ~= nil
-					and type(COMPONENTS.Config.Groups[tostring(v)].Permission) == "table"
-				then
-					if COMPONENTS.Config.Groups[tostring(v)].Permission.Level > highest then
-						highest = COMPONENTS.Config.Groups[tostring(v)].Permission.Level
-					end
+				local g = COMPONENTS.Config.Groups[tostring(v)]
+				if g and g.PermLevel > highest then
+					highest = g.PermLevel
 				end
 			end
-
 			return highest
 		end,
 	}
@@ -239,12 +201,12 @@ function PlayerClass(source, data)
 
 	for _, v in ipairs(_data:GetData("Groups")) do
 		local g = COMPONENTS.Config.Groups[tostring(v)]
-		if g and type(g.Permission) == "table" and g.Permission.Group then
+		if g and g.PermGroup and g.PermGroup ~= "" then
 			if ident then
 				ExecuteCommand(("add_principal identifier.%s:%s group.%s"):format(
 					idType,
 					ident,
-					g.Permission.Group
+					g.PermGroup
 				))
 			end
 		end

@@ -1,74 +1,28 @@
 AddEventHandler("Core:Shared:Ready", function()
 	COMPONENTS.Default:AddAuth('roles', 1662066295, {
-        {
-			Abv = "Whitelisted",
-			Name = "Whitelisted",
-			Queue = {
-				Priority = 0,
-			},
-			Permission = {
-				Level = 0,
-				Group = "",
-			},
-        },
-        {
-			Abv = "Staff",
-			Name = "Staff",
-			Queue = {
-				Priority = 0,
-			},
-			Permission = {
-				Level = 50,
-				Group = "staff",
-			},
-        },
-        {
-			Abv = "Admin",
-			Name = "Admin",
-			Queue = {
-				Priority = 0,
-			},
-			Permission = {
-				Level = 75,
-				Group = "admin",
-			},
-        },
-        {
-			Abv = "Owner",
-			Name = "Owner",
-			Queue = {
-				Priority = 0,
-			},
-			Permission = {
-				Level = 100,
-				Group = "admin",
-			},
-        },
-    })
+		{ Abv = "Whitelisted", Name = "Whitelisted", QueuePriority = 0, QueueMessage = "",  PermLevel = 0,   PermGroup = ""      },
+		{ Abv = "Staff",       Name = "Staff",       QueuePriority = 0, QueueMessage = "",  PermLevel = 50,  PermGroup = "staff" },
+		{ Abv = "Admin",       Name = "Admin",       QueuePriority = 0, QueueMessage = "",  PermLevel = 75,  PermGroup = "admin" },
+		{ Abv = "Owner",       Name = "Owner",       QueuePriority = 0, QueueMessage = "",  PermLevel = 100, PermGroup = "admin" },
+	})
 
-	COMPONENTS.Database.Auth:find({
-		collection = "roles",
-		query = {},
-	}, function(success, results)
-		if not success or #results <= 0 then
-			COMPONENTS.Logger:Critical("Core", "Failed to Load User Groups", {
-				console = true,
-				file = true,
-			})
-
-			return
-		end
-
-		COMPONENTS.Config.Groups = {}
-
-		for k, v in ipairs(results) do
-			COMPONENTS.Config.Groups[v.Abv] = v
-		end
-
-		COMPONENTS.Logger:Info("Core", string.format("Loaded %s User Groups", #results), {
+	local results = COMPONENTS.Database:Find('roles', {})
+	if not results or #results == 0 then
+		COMPONENTS.Logger:Critical("Core", "Failed to Load User Groups", {
 			console = true,
+			file = true,
 		})
-	end)
+		return
+	end
+
+	COMPONENTS.Config.Groups = {}
+	for k, v in ipairs(results) do
+		COMPONENTS.Config.Groups[v.Abv] = v
+	end
+
+	COMPONENTS.Logger:Info("Core", string.format("Loaded %s User Groups", #results), {
+		console = true,
+	})
 
 	COMPONENTS.Version:Check('Mythic-Framework/Mythic-VersionCheckers', 'mythic-base')
 end)
