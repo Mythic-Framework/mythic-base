@@ -258,6 +258,7 @@ DB_SCHEMAS = {
             dealership   = 'VARCHAR(64)',
             vehicle      = 'VARCHAR(64)',
             make         = 'VARCHAR(64)',
+            model        = 'VARCHAR(64)',
             category     = 'VARCHAR(64)',
             class        = 'VARCHAR(8)',
             price        = 'INT DEFAULT 0',
@@ -453,17 +454,6 @@ DB_SCHEMAS = {
 
     -- Phone
 
-    phone_contacts = {
-        cols = {
-            Owner   = 'INT',
-            Name    = 'VARCHAR(128)',
-            Number  = 'VARCHAR(20)',
-            Blocked = 'TINYINT(1) DEFAULT 0',
-        },
-        jsonCols = {},
-        indexes  = { 'Owner', 'Number' },
-    },
-
     phone_messages = {
         cols = {
             owner   = 'VARCHAR(20)',
@@ -493,6 +483,19 @@ DB_SCHEMAS = {
         },
         jsonCols = {},
         indexes  = { 'owner', 'number', 'time', 'deleted' },
+    },
+
+    phone_contacts = {
+        cols = {
+            character = 'INT',
+            name      = 'VARCHAR(128)',
+            number    = 'VARCHAR(20)',
+            color     = 'VARCHAR(32)',
+            avatar    = 'TEXT',
+            favorite  = 'TINYINT(1) DEFAULT 0',
+        },
+        jsonCols = {},
+        indexes  = { 'character', 'number' },
     },
 
     irc_channels = {

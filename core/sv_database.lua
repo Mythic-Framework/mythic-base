@@ -177,13 +177,31 @@ local function buildWhere(where, schema)
             elseif op == 'lt'   then parts[#parts+1] = ('`%s` < ?'):format(field)                             ; params[#params+1] = v
             elseif op == 'gte'  then parts[#parts+1] = ('`%s` >= ?'):format(field)                            ; params[#params+1] = v
             elseif op == 'lte'  then parts[#parts+1] = ('`%s` <= ?'):format(field)                            ; params[#params+1] = v
-            elseif op == 'ne'   then parts[#parts+1] = ('(`%s` != ? OR `%s` IS NULL)'):format(field, field)   ; params[#params+1] = v
+            elseif op == 'ne'   then
+                if type(v) == 'table' then
+                    if #v == 0 then -- NE([]) matches everything
+                        parts[#parts+1] = '1=1'
+                    else
+                        local ph = {}
+                        for i = 1, #v do ph[#ph+1] = '?'; params[#params+1] = v[i] end
+                        parts[#parts+1] = ('(`%s` NOT IN (%s) OR `%s` IS NULL)'):format(field, table.concat(ph, ','), field)
+                    end
+                elseif v == nil then
+                    parts[#parts+1] = ('`%s` IS NOT NULL'):format(field)
+                else
+                    parts[#parts+1] = ('(`%s` != ? OR `%s` IS NULL)'):format(field, field); params[#params+1] = v
+                end
             elseif op == 'like' then parts[#parts+1] = ('`%s` LIKE ?'):format(field)                          ; params[#params+1] = v
             elseif op == 'in'   then
                 if #v == 0 then parts[#parts+1] = '0=1'; return end
                 local ph = {}
                 for i = 1, #v do ph[#ph+1] = '?'; params[#params+1] = v[i] end
                 parts[#parts+1] = ('`%s` IN (%s)'):format(field, table.concat(ph, ','))
+            elseif op == 'nin'  then
+                if #v == 0 then return end
+                local ph = {}
+                for i = 1, #v do ph[#ph+1] = '?'; params[#params+1] = v[i] end
+                parts[#parts+1] = ('(`%s` NOT IN (%s) OR `%s` IS NULL)'):format(field, table.concat(ph, ','), field)
             end
         else
             parts[#parts+1]  = ('`%s` = ?'):format(field)
@@ -277,6 +295,7 @@ _DATABASE = {
     LTE  = function(v)   return { __op = 'lte',  v = v    } end,
     NE   = function(v)   return { __op = 'ne',   v = v    } end,
     IN   = function(t)   return { __op = 'in',   v = t    } end,
+    NIN  = function(t)   return { __op = 'nin',  v = t    } end,
     LIKE = function(v)   return { __op = 'like', v = v    } end,
     OR   = function(...) return { __op = 'or',   v = {...} } end,
     PUSH = function(v)   return { __op = 'push', v = v    } end,
@@ -615,6 +634,35 @@ _DATABASE = {
             end)
         end)
     end,
+
+    -- FindWhere
+    -- Like Find but accepts a raw SQL WHERE clause string for cases the typed WHERE builder can't express
+    -- opts: same as Find — { sort, limit, offset }
+    FindWhere = function(self, tbl, whereSQL, params, opts, cb)
+        if type(opts) == 'function' then cb, opts = opts, nil end
+        if type(params) == 'function' then cb, params = params, nil end
+        return exec(cb, function(done)
+            local schema = requireSchema(tbl, 'FindWhere')
+            if not schema then done(nil) return end
+            ensureTable(tbl, schema)
+            local sql = ('SELECT %s FROM `mfw_%s` WHERE %s'):format(buildSelect(tbl, schema), tbl, whereSQL or '1=1')
+            if opts and opts.sort  then sql = sql .. (' ORDER BY `%s` %s'):format(opts.sort.field, opts.sort.dir or 'ASC') end
+            if opts and opts.limit  then sql = sql .. (' LIMIT %d'):format(opts.limit)  end
+            if opts and opts.offset then sql = sql .. (' OFFSET %d'):format(opts.offset) end
+            MySQL.query(sql, params or {}, function(rows)
+                if not rows then
+                    print(('[DATABASE] [ERROR] FindWhere failed on table "%s"'):format(tbl))
+                    done(nil) return
+                end
+                local out = {}
+                for i = 1, #rows do out[i] = decodeRow(rows[i], schema) end
+                done(out)
+            end)
+        end)
+    end,
+
+    -- TODO: Database:Transaction(fn) — wrap multiple operations in START TRANSACTION / COMMIT / ROLLBACK
+    -- TODO: Needed for atomic multi-step operations (e.g. bank transfers: debit + credit must both succeed or both fail)
 
     -- Raw
     Raw = function(self, sql, params, cb)
