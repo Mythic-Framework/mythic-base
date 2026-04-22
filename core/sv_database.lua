@@ -513,6 +513,7 @@ _DATABASE = {
             MySQL.query(('SELECT `_id` FROM `mfw_%s` WHERE %s LIMIT 1'):format(tbl, w), params, function(rows)
                 if rows and #rows > 0 then
                     local setParts, setParams = buildSetParts(fields, schema)
+                    if #setParts == 0 then done(rows[1]) return end
                     setParams[#setParams+1] = rows[1]._id
                     MySQL.query(('UPDATE `mfw_%s` SET %s WHERE `_id`=?'):format(tbl, table.concat(setParts, ',')), setParams, function(r)
                         if not r then

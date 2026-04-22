@@ -47,9 +47,9 @@ COMPONENTS.Sequence = {
 
 AddEventHandler("Core:Server:StartupReady", function()
     MySQL.rawExecute.await([[
-        CREATE TABLE IF NOT EXISTS `sequence` (
+        CREATE TABLE IF NOT EXISTS `mfw_sequence` (
             `id` VARCHAR(64) NOT NULL COLLATE 'utf8mb4_unicode_520_ci',
-            `sequence` BIGINT(20) NOT NULL DEFAULT '1',
+            `mfw_sequence` BIGINT(20) NOT NULL DEFAULT '1',
             PRIMARY KEY (`id`) USING BTREE
         )
         COLLATE='utf8mb4_unicode_520_ci'
@@ -58,7 +58,7 @@ AddEventHandler("Core:Server:StartupReady", function()
 
     COMPONENTS.Logger:Info("Sequence", "Ensured sequence table exists")
 
-    local t = MySQL.rawExecute.await("SELECT id, sequence FROM sequence")
+    local t = MySQL.rawExecute.await("SELECT id, sequence FROM mfw_sequence")
     if t then
         for k, v in ipairs(t) do
             _cachedSeq[v.id] = {

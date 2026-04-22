@@ -28,7 +28,7 @@ DB_SCHEMAS = {
             Origin       = 'VARCHAR(128)',
             Apartment    = 'INT',
             CryptoWallet = 'VARCHAR(64)',
-            BankAccount  = 'INT',
+            BankAccount  = 'VARCHAR(64)',
             default      = 'TINYINT(1) DEFAULT 0',
         },
         jsonCols = { 'Jobs', 'Licenses', 'States', 'Jailed', 'ICU', 'GangChain', 'Parole', 'MDTHistory', 'Alias', 'Apps', 'PhoneSettings', 'PhonePermissions', 'LaptopApps', 'LaptopSettings', 'LaptopPermissions', 'Crypto', 'Wardrobe', 'Status', 'Animations', 'Addiction' },
@@ -154,9 +154,11 @@ DB_SCHEMAS = {
             radarFlag       = 'TINYINT(1) DEFAULT 0',
             Impound         = 'TINYINT(1) DEFAULT 0',
             Out             = 'TINYINT(1) DEFAULT 0',
+            StorageType     = 'INT DEFAULT 0',
+            StorageId       = 'VARCHAR(64)',
         },
-        jsonCols = { 'Owner', 'Flags', 'Mods', 'Insurance' },
-        indexes  = { 'VIN', 'RegisteredPlate', 'OwnerType' },
+        jsonCols = { 'Owner', 'Flags', 'Mods', 'Insurance', 'Storage' },
+        indexes  = { 'VIN', 'RegisteredPlate', 'OwnerType', 'StorageType', 'StorageId' },
     },
 
     -- Firearms
@@ -321,7 +323,6 @@ DB_SCHEMAS = {
 
     properties = {
         cols = {
-            owner       = 'INT',
             type        = 'VARCHAR(64)',
             Name        = 'VARCHAR(128)',
             Active      = 'TINYINT(1) DEFAULT 1',
@@ -334,16 +335,16 @@ DB_SCHEMAS = {
             locked      = 'TINYINT(1) DEFAULT 1',
             default     = 'TINYINT(1) DEFAULT 0',
         },
-        jsonCols = { 'Coords', 'Doors', 'Shells', 'location', 'keys', 'upgrades' },
-        indexes  = { 'owner', 'type', 'Active', 'sold', 'foreclosed' },
+        jsonCols = { 'Coords', 'Doors', 'Shells', 'location', 'keys', 'upgrades', 'owner', 'data' },
+        indexes  = { 'type', 'Active', 'sold', 'foreclosed' },
     },
 
     properties_furniture = {
         cols = {
-            Property = 'INT',
+            property = 'INT',
         },
         jsonCols = { 'Furniture' },
-        indexes  = { 'Property' },
+        indexes  = { 'property' },
     },
 
     -- Scenes
