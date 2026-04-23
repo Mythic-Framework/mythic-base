@@ -24,15 +24,19 @@ DB_SCHEMAS = {
             LastPlayed = 'BIGINT DEFAULT -1',
             New        = 'TINYINT(1) DEFAULT 1',
             Deleted    = 'TINYINT(1) DEFAULT 0',
-            Bio          = 'TEXT',
-            Origin       = 'VARCHAR(128)',
-            Apartment    = 'INT',
-            CryptoWallet = 'VARCHAR(64)',
-            BankAccount  = 'VARCHAR(64)',
-            default      = 'TINYINT(1) DEFAULT 0',
+            Bio            = 'TEXT',
+            Origin         = 'VARCHAR(128)',
+            Apartment      = 'INT',
+            CryptoWallet   = 'VARCHAR(64)',
+            BankAccount    = 'VARCHAR(64)',
+            Callsign       = 'VARCHAR(32)',
+            Attorney       = 'TINYINT(1) DEFAULT 0',
+            MDTSystemAdmin = 'TINYINT(1) DEFAULT 0',
+            LastClockOn    = 'BIGINT DEFAULT 0',
+            default        = 'TINYINT(1) DEFAULT 0',
         },
-        jsonCols = { 'Jobs', 'Licenses', 'States', 'Jailed', 'ICU', 'GangChain', 'Parole', 'MDTHistory', 'Alias', 'Apps', 'PhoneSettings', 'PhonePermissions', 'LaptopApps', 'LaptopSettings', 'LaptopPermissions', 'Crypto', 'Wardrobe', 'Status', 'Animations', 'Addiction' },
-        indexes  = { 'SID', 'User', 'Deleted', 'CryptoWallet' },
+        jsonCols = { 'Jobs', 'Licenses', 'States', 'Jailed', 'ICU', 'GangChain', 'Parole', 'MDTHistory', 'Alias', 'Apps', 'PhoneSettings', 'PhonePermissions', 'LaptopApps', 'LaptopSettings', 'LaptopPermissions', 'Crypto', 'Wardrobe', 'Status', 'Animations', 'Addiction', 'Salary', 'TimeClockedOn' },
+        indexes  = { 'SID', 'User', 'Deleted', 'CryptoWallet', 'Callsign' },
     },
 
     jobs = {
@@ -157,7 +161,7 @@ DB_SCHEMAS = {
             StorageType     = 'INT DEFAULT 0',
             StorageId       = 'VARCHAR(64)',
         },
-        jsonCols = { 'Owner', 'Flags', 'Mods', 'Insurance', 'Storage' },
+        jsonCols = { 'Owner', 'Flags', 'Mods', 'Insurance', 'Storage', 'Strikes', 'GovAssigned' },
         indexes  = { 'VIN', 'RegisteredPlate', 'OwnerType', 'StorageType', 'StorageId' },
     },
 
@@ -165,22 +169,26 @@ DB_SCHEMAS = {
 
     firearms = {
         cols = {
-            serial = 'VARCHAR(64)',
-            owner  = 'INT',
-            model  = 'VARCHAR(64)',
+            Serial        = 'VARCHAR(64)',
+            Item          = 'VARCHAR(64)',
+            Model         = 'VARCHAR(128)',
+            PurchaseTime  = 'BIGINT DEFAULT 0',
+            Scratched     = 'TINYINT(1) DEFAULT 0',
+            FiledByPolice = 'TINYINT(1) DEFAULT 0',
+            unlisted      = 'TINYINT(1) DEFAULT 0',
         },
-        jsonCols = {},
-        indexes  = { 'serial', 'owner' },
+        jsonCols = { 'Owner', 'Flags' },
+        indexes  = { 'Serial', 'Scratched' },
     },
 
     firearms_projectiles = {
         cols = {
-            serial = 'VARCHAR(64)',
+            Serial = 'VARCHAR(64)',
             weapon = 'VARCHAR(64)',
             date   = 'BIGINT DEFAULT 0',
         },
-        jsonCols = {},
-        indexes  = { 'serial', 'weapon' },
+        jsonCols = { 'data' },
+        indexes  = { 'Serial', 'weapon' },
     },
 
     -- Banking
@@ -216,16 +224,19 @@ DB_SCHEMAS = {
 
     loans = {
         cols = {
-            SID              = 'INT',
-            Amount           = 'BIGINT DEFAULT 0',
-            Remaining        = 'BIGINT DEFAULT 0',
-            MissedPayments   = 'INT DEFAULT 0',
-            MissablePayments = 'INT DEFAULT 0',
-            Active           = 'TINYINT(1) DEFAULT 1',
-            date             = 'BIGINT DEFAULT 0',
+            SID               = 'INT',
+            Amount            = 'BIGINT DEFAULT 0',
+            Remaining         = 'BIGINT DEFAULT 0',
+            MissedPayments    = 'INT DEFAULT 0',
+            MissablePayments  = 'INT DEFAULT 0',
+            Active            = 'TINYINT(1) DEFAULT 1',
+            date              = 'BIGINT DEFAULT 0',
+            NextPayment       = 'BIGINT DEFAULT 0',
+            LastMissedPayment = 'BIGINT DEFAULT 0',
+            Defaulted         = 'TINYINT(1) DEFAULT 0',
         },
         jsonCols = {},
-        indexes  = { 'SID', 'Active' },
+        indexes  = { 'SID', 'Active', 'Defaulted', 'NextPayment' },
     },
 
     loans_credit_scores = {
@@ -616,15 +627,31 @@ DB_SCHEMAS = {
     },
 
     mdt_notices = {
-        cols = { default = 'TINYINT(1) DEFAULT 0' },
-        jsonCols = { 'charges', 'civilians', 'officers', 'evidence' },
-        indexes  = {},
+        cols = {
+            title       = 'VARCHAR(256)',
+            description = 'TEXT',
+            time        = 'BIGINT DEFAULT 0',
+            job         = 'VARCHAR(64)',
+            workplace   = 'VARCHAR(64)',
+            author      = 'INT',
+        },
+        jsonCols = {},
+        indexes  = { 'time', 'job' },
     },
 
     mdt_reports = {
-        cols = { default = 'TINYINT(1) DEFAULT 0' },
-        jsonCols = { 'charges', 'civilians', 'officers', 'evidence' },
-        indexes  = {},
+        cols = {
+            ID         = 'INT DEFAULT 0',
+            title      = 'VARCHAR(256)',
+            time       = 'BIGINT DEFAULT 0',
+            author_SID = 'INT',
+            type       = 'INT DEFAULT 0',
+            notes      = 'TEXT',
+            _search    = 'TEXT',
+            default    = 'TINYINT(1) DEFAULT 0',
+        },
+        jsonCols = { 'author', 'suspects', 'people', 'assisting', 'primaries', 'tags', 'charges', 'civilians', 'officers', 'evidence', 'history', 'lastUpdated' },
+        indexes  = { 'ID', 'author_SID', 'time', 'type' },
     },
 
     mdt_metrics = {
